@@ -1,0 +1,7 @@
+PySide6
+numpy
+requests
+soundcard
+Pillow
+pynput
+pyinstaller
