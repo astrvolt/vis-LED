@@ -3405,10 +3405,11 @@ def _detach_if_needed() -> None:
     """
     Re-exec detached from the controlling terminal/parent, once.
     Uses an env var as a re-entry guard so the detached copy doesn't
-    try to detach again. On POSIX this double-forks into a new
-    session so SIGHUP from a closed terminal never reaches it; on
-    Windows, DETACHED_PROCESS + CREATE_NEW_PROCESS_GROUP achieves the
-    same "survives closing the launching console" behavior.
+    try to detach again. On POSIX this re-execs via subprocess.Popen
+    with start_new_session=True, landing the child in a new session
+    so SIGHUP from a closed terminal never reaches it; on Windows,
+    DETACHED_PROCESS + CREATE_NEW_PROCESS_GROUP achieves the same
+    "survives closing the launching console" behavior.
 
     Skipped entirely in a frozen build (see _is_frozen): a
     double-clicked .exe/.app is launched by the OS with no controlling
@@ -3442,19 +3443,37 @@ def _detach_if_needed() -> None:
         )
         sys.exit(0)
     else:
-        # First fork + become session leader so we're no longer
-        # attached to the controlling terminal at all (classic daemonize
-        # first step), then fork again so we can't reacquire one.
-        if os.fork() > 0:
-            sys.exit(0)
-        os.setsid()
-        if os.fork() > 0:
-            sys.exit(0)
-
-        devnull = os.open(os.devnull, os.O_RDWR)
-        os.dup2(devnull, 0)
-        os.dup2(devnull, 1)
-        os.dup2(devnull, 2)
+        # Re-exec detached via subprocess.Popen + start_new_session,
+        # rather than a raw os.fork()/os.fork() double-fork.
+        #
+        # By this point in startup, several imports (requests,
+        # soundcard, pynput) may already have spun up background
+        # threads — e.g. soundcard's CoreAudio enumeration on macOS.
+        # os.fork() in an already-multithreaded process only
+        # duplicates the calling thread; any lock another thread held
+        # at fork time is duplicated in its locked state too, forever
+        # unlockable in the child. On Linux this mostly goes
+        # unnoticed; on modern macOS it reliably segfaults
+        # (EXC_BAD_ACCESS) inside Apple's own threaded frameworks,
+        # which are explicitly documented as not fork-safe.
+        #
+        # subprocess.Popen forks-and-execs internally in a
+        # C-implemented, signal/thread-safe way (posix_spawn under
+        # the hood on modern Python), sidestepping the hazard
+        # entirely. start_new_session=True is the modern equivalent
+        # of the old setsid() call — new session, no controlling
+        # terminal, survives the parent terminal closing (SIGHUP).
+        import subprocess
+        subprocess.Popen(
+            [sys.executable, os.path.abspath(__file__), *sys.argv[1:]],
+            env=env,
+            start_new_session=True,
+            close_fds=True,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        sys.exit(0)
 
 
 def main() -> None:
