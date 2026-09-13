@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 LED panel widget — single-file desktop port of vis.html.
 
@@ -767,12 +767,12 @@ SPOTIFY_POLL_FOCUSED_MS = 1000
 SPOTIFY_COLOR_TRANSITION_MS = 900
 
 REDIRECT_PORT = 8945
-REDIRECT_URI = "https://jwwerson.sbs/w/auth.html"
+REDIRECT_URI = "https://visled.athrx.space/w/auth"
 # CORS is scoped to exactly this origin (not "*") since the /status
 # endpoint below accepts a fetch() from whatever page the browser has
 # open — restricting the origin means only auth.html itself, not every
 # other tab the user happens to have open, is allowed to talk to it.
-REDIRECT_ORIGIN = "https://jwwerson.sbs"
+REDIRECT_ORIGIN = "https://visled.athrx.space"
 
 def _default_config_dir() -> str:
     """
